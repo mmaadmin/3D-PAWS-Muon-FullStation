@@ -960,7 +960,7 @@ void SimChangeCheck() {
 }
 #endif
 
-#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MUON)
+#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
 /*
  * ======================================================================================================================
  * callback_imsi() - Callback for International Mobile Subscriber Identity 

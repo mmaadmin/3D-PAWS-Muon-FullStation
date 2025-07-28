@@ -27,8 +27,18 @@ void OBS_Do();
  *=======================================================================================================================
  */
 void SD_initialize() {
-
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  // Configure SPI using SdSpiConfig:
+  // Parameters:
+  //  - CS pin (SD_ChipSelect)
+  //  - SPI mode: SHARED_SPI lets you share the SPI bus with other devices
+  //  - SPI clock speed (here 10 MHz)
+  //  - SPI instance pointer (&SPI) for SPI0
+  SdSpiConfig spiConfig(SD_ChipSelect, SHARED_SPI, SD_SCK_MHZ(10), &SPI);
+  if (!SD.begin(spiConfig)) {
+#else
   if (!SD.begin(SD_ChipSelect)) {
+#endif
     Output ("SD:NF");
     SystemStatusBits |= SSB_SD;
     delay (5000);

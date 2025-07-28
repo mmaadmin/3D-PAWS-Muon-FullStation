@@ -18,7 +18,11 @@
  *  Serial Console Enable
  * ======================================================================================================================
  */
+#if (PLATFORM_ID == PLATFORM_MSOM)
+int SCE_PIN = D4;
+#else
 int SCE_PIN = D8;
+#endif
 bool SerialConsoleEnabled = false;  // Variable for serial monitor control
 
 /*

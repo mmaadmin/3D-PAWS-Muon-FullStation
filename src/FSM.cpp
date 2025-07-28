@@ -31,8 +31,25 @@ PRODUCT_VERSION(1);
  *     #define LORA_IRQ_PIN  D20    // G0 on LoRa board
  *     #define LORA_SS       D3     // Slave Select Pin
  *     #define LORA_RESET    D21    // Used by lora_initialize()
+ *
+ *     Serial Console moves to D4
+ *     #if (PLATFORM_ID == PLATFORM_MSOM)
+ *     int SCE_PIN = D4;
+ * 
+ *     SD CARD
+ *     Pin  Name
+ *     17  3v3
+ *     19  SPI MOSI
+ *     21  SPI MISO
+ *     23  SPI SCK
+ *     25  GND
+ *     32  D5 CS
+ * 
+ *     #if (PLATFORM_ID == PLATFORM_MSOM)
+ *     int LED_PIN = D22;             // Added LED Pin 36
  *     #else
- *  
+ *     int  LED_PIN = D7;            // Built in LED
+ * 
  *                        
  * NOTES:
  * When there is a successful transmission of an observation any need to send obersavations will be sent. 
@@ -61,7 +78,7 @@ PRODUCT_VERSION(1);
  *  DFRobot_B_LUX_V30B      https://github.com/DFRobot/DFRobot_B_LUX_V30B - 1.0.1 I2C ADDRESS 0x4A (Not Used Reference Only) SEN0390
  *                          https://wiki.dfrobot.com/Ambient_Light_Sensor_0_200klx_SKU_SEN0390
  *  RTCLibrary              https://github.com/adafruit/RTClib - 1.13.0
- *  SdFat                   https://github.com/greiman/SdFat.git - 1.0.16 by Bill Greiman
+ *  SdFat                   https://github.com/greiman/SdFat.git - 1.0.16 by Bill Greiman 2.3.0
  *  RF9X-RK-SPI1            https://github.com/rickkas7/AdafruitDataLoggerRK - 0.2.0 - Modified RadioHead LoRa for SPI1
  *  AES-master              https://github.com/spaniakos/AES - 0.0.1 - Modified to make it compile
  *  CryptoLW-RK             https://github.com/rickkas7/CryptoLW-RK - 0.2.0
@@ -304,6 +321,7 @@ PRODUCT_VERSION(1);
 #include <i2cArduino.h>
 #include <LeafSens.h>
 #include <i2cMultiSm.h>
+#include <AB1805_RK.h>
 
 /*
  * ======================================================================================================================
@@ -380,7 +398,11 @@ PRODUCT_VERSION(1);
 char msgbuf[MAX_MSGBUF_SIZE]; // Used to hold messages
 char *msgp;                   // Pointer to message text
 char Buffer32Bytes[32];       // General storage
+#if (PLATFORM_ID == PLATFORM_MSOM)
+int LED_PIN = D22;             // Added LED Header Pin 22
+#else
 int  LED_PIN = D7;            // Built in LED
+#endif
 bool TurnLedOff = false;      // Set true in rain gauge interrupt
 unsigned long SystemStatusBits = SSB_PWRON; // Set bit 1 to 1 for initial value power on. Is set to 0 after first obs
 bool JustPoweredOn = true;    // Used to clear SystemStatusBits set during power on device discovery
@@ -516,6 +538,13 @@ SYSTEM_THREAD(ENABLED);
  * ======================================================================================================================
  */
 void setup() {
+
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  SystemPowerConfiguration powerConfig = System.getPowerConfiguration();
+  powerConfig.auxiliaryPowerControlPin(D7).interruptPin(A7);
+  System.setPowerConfiguration(powerConfig);
+#endif
+
   // The device has booted, reconnect the battery.
 #if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
 	pmic.enableBATFET();
@@ -671,7 +700,7 @@ void setup() {
   }
   Wind_Distance_Air_Initialize(); // Will call HeartBeat()
 
-#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_SOM)
+#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
   // Get International Mobile Subscriber Identity
   if ((RESP_OK == Cellular.command(callback_imsi, imsi, 10000, "AT+CIMI\r\n")) && (strcmp(imsi,"") != 0)) {
     sprintf (msgbuf, "IMSI:%s", imsi);
@@ -847,7 +876,7 @@ void loop() {
     // int powerSource = System.powerSource();
     // if ((powerSource == POWER_SOURCE_BATTERY) && (System.batteryCharge() <= 10.0) {
 
-    if (!pmic.isPowerGood() && (System.batteryCharge() <= 15.0)) {
+    if (0 && !pmic.isPowerGood() && (System.batteryCharge() <= 15.0)) {   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       Output("Low Power!");
 
