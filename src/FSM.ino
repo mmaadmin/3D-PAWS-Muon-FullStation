@@ -1,43 +1,231 @@
 PRODUCT_VERSION(1);
 #define COPYRIGHT "Copyright [2025] [University Corporation for Atmospheric Research]"
-#define VERSION_INFO "FSM-250721v1"
+#define VERSION_INFO "FS-250721v1"
 
 /*
  *======================================================================================================================
- * FullStation (FS) - Muon (M)
- *   Board Type : Particle Muon https://docs.particle.io/reference/datasheets/m-series/muon-datasheet/
- *
+ * FullStation (FS)
+ *   Board Type : Particle Boron https://docs.particle.io/reference/datasheets/b-series/b404x-datasheet/
+ *   Board Type : Particle Argon https://docs.particle.io/reference/datasheets/wi-fi/argon-datasheet
+ *   Board Type : Particle Muon  https://docs.particle.io/reference/datasheets/m-series/muon-datasheet
+ * 
  *   Description: Monitor 3D-PAWS Full Station and transmit data to Particle Cloud
  *   Author: Robert Bubon
- *   Date:   2025-03-17 RJB Initial Development Based on Full Station Boron Version 38
+  *   Date:   2021-01-14 RJB Initial Development
+ *           2021-02-10 RJB Work on SD code area
+ *           2021-03-08 RJB LoRa added, 15min samples, Cell Power Off, Wind Observations Corrected
+ *           2021-03-13 RJB Reworked N2S sending
+ *           2021-04-20 RJB Clear Rain Gauge Counter
+ *           2021-06-04 RJB Added Particle Theads
+ *           2021-06-10 RJB Added Countdown timer on jumper, Modified Network Disconnect and Power Down disconnect
+ *           2021-06-14 RJB When jumper set unit will continue the network connection to Particle, breathe cyan
+ *           2021-06-21 RJB Correct bug in network connect and handle BME returning NAN.
+ *           2021-07-12 RJB Always Connected and Debug Added
+ *           2021-07-21 RJB Updated Libraries after HTU has infinate loop in code
+ *           2021-10-06 RJB Version 2
+ *                          Merged 15MC changes in, removed unneeded debug, 
+ *                          formalized the Always Connected branch removed the 15m disconnect code 
+ *           2021-10-22 RJB Version 3 
+ *                          Remote Reboot Must pass "NOW" from Particle IDE
+ *                          Battery Charger Fault Register, Variable name "CFR"
+ *                          Adafruit BMP388 Support Added
+ *           2022-01-03 RJB Version 4
+ *                          Added Support for 2 MCP sensors
+ *           2022-01-29 RJB Version 5
+ *                          Spelling Corrections
+ *                          Added support for Grove Shield
+ *                          PIN CHANGES FOR GROVE SHIELD
+ *                             LORA - D7 moved to A1
+ *                             Rain - D8 moved to A3
+ *                             Anemometer - D6 moved to A2
+ *          2022-04-10  RJB Version 6
+ *                          Added support for 3rd Party Sim
+ *                          Changed guage to gauge - proper spelling
+ *                          Added i2c power reset relay board ctrl on A0 
+ *          2022-08-01  RJB Version 7
+ *                          Wind direction check for 0-360 value
+ *                          Nan Check on t,h,p sensor values, return -999.99 for bad t and 0.0 for h,p
+ *          2022-09-23 RJB Version 8
+ *                          Modified SystemStatusBits handling of SSB_FROM_N2S and SSB_N2S
+ *                          Added Support for 8 line OLED - Special Compile
+ *          2022-10-17 RJB Version 9
+ *                          Increased N2S file size to 2 days and set float precision to 1/10th.
+ *          2022-10-24 RJB  Support of Argon board added
+ *                            Note: PMIC (BQ24195) not available on Argon (Gen 3)
+ *                                  Argon uses XC6802
+ *                                  No power off on low battery support with Argon
+ *                          Wifi AuthType, SSID, Password stored in file WIFI.txt
+ *          2022-10-31 RJB Larger OLED for Argon
+ *          2022-11-03 RJB WIFI.TXT changed from space to comma as the separator
+ *                         Wait for serial While loop put back
+ *                         Added a 120s timeout to wait for serial.
+ *          2022-11-17 RJB Merged changes from MKR NB1500 code base. A lot of the initialization
+ *                         was moved out of setup() to function calls for the initialization.
+ *                         Argon only - Added a System.reset() after 1 hour with out a WiFi Connection
+ *          2022-12-21 RJB added clearing of SSB_HTU21DF in JPO_ClearBits()
+ *          2023-01-13 RJB Added MMA Barbados Product ID
+ *          2023-03-14 RJB Added VEML7700 light sensor support
+ *          2023-04-19 RJB Added Support for Watchdog Monitor Relay Board.
+ *                         Moved from 3.0.0 Firmware to 4.0.2 
+ *          2023-04-19 RJB Version 11 
+ *                         Clear SI and Lux Status bits if not found
+ *          2023-06-07 RJB Rain gauge inturrupts turn on LED, Background work shuts it off
+ *          2023-06-12 RJB Compiled for firmware 4.1.0
+ *          2023-07-10 RJB Added Min Max Quality Controls to sensor values
+ *          2023-07-11 RJB Added Daily Reboot
+ *          2023-07-25 RJB Added Particle WITH_ACK check and refresh of wind data after sending
+ *          2023-07-30 RJB Fixed bug to get RTC updated from network time
+ *          2023-08-09 RJB Refresh of wind data only happend if it took 2 seconds or more to transmit.
+ *                         Added EEPROM of N2S file position pointer and Total Rain Today and Prior Day
+ *          2023-08-24 RJB Removed code supporting the non Grove shield option
+ *          2023-08-31 RJB Moved to Particle function RESET (NOW) to DoAction(REBOOT). Added support
+ *                         for DoAction(CRT) to Clear Rain Totals from EEPROM
+ *          2023-10-05 RJB Version 18
+ *                         Moved Serial Console Pin A4 to D8
+ *                         Added Dynamic configuration for pin A4
+ *                            If SD file A4DIST.TXT exists then Distance Gauge
+ *                            If SD file A4RAIN.TXT exists then 2nd Rain Gauge
+ *                         Added support for setting pin A4 from Particle
+ *                           DoAction Commands  A4DIST, A4RAIN, A4CLR - Requires DoAction(REBOOT) after!
+ *          2023-10-19 RJB Version 19
+ *                         Added support for determining if oled is 32 or 64 pixels high
+ *                         Added support for Air Quality Sensor PM25AQI
+ *          2023-10-25 RJB Version 21 Actual Release
+ *                         Bug Fix on Distance reading. 
+ *                         Added Dynamic configuration for Distance Sensor and related distance calc
+ *                               If SD file 5MDIST.TXT exists then distance reading is divided by 8
+ *                               If SD file 5MDIST.TXT does NOT exist then distance is divided by 4, the default
+ *                         Added support for setting distance meter type from Particle
+ *                           DoAction Command 5MDIST - No reboot needed if return code to Particle is 0
+ *                           If you send/resend A4DIST, the 5MDIST.TXT is deleted. 
+ *          2023-12-19 RJB Version 22
+ *                         Modified WiFi Credentials Setup 
+ *                         Now save unreported rain before daily reboot
+ *          2024-01-05 RJB Code fix for Daily Totals rotation
+ *          2024-01-14 RJB Version 23
+ *                         Code Fix added eeprom_valid = true; in the Initialize
+ *          2024-01-31 RJB Version 24
+ *                         Special for stations using A3 to rain/D8 and A2 to Wind/D6
+ *          2024-02-23 RJB Version 25
+ *                         Corrected Distance calculation
+ *                         If file exists then we multiply by 1.25. If no file, then we multiply by 2.5 for the 10m Sensor
+ *          2024-05-29 RJB Version 26
+ *                         Bug fixes in WiFiChangeCheck() and SimChangeCheck()
+ *                         Needed to add #if PLATFORM_ID == PLATFORM_BORON around the getting of IMSI information
+ *                         Added output of the length of the particle payload when we send
+ *                         Added support for wet bulb temperature (wbt)
+ *          2024-06-11 RJB Version 27/28
+ *                         Split code up into include files
+ *                         Added CONFIG.TXT support
+ *                         Moved LoRa configs to CONFIG.TXT
+ *                         Added support for heat index (hi)
+ *                         Added support for WBGT
+ *                         Modified SF.h - isValidHexString(), hexStringToUint32(), SDC.h - SD_findKey()
+ *          2024-06-11 RJB Version 29 Released
+ *                         Bug Bix had = and not == on QC check for HI, WBT, WBGT
+ *                         Bug Fix had 0.034 and and 0.0034 in WBGT eq.
+ *                         Removed QC check for WBGT
+ *                         Change QC for heat index to display a temperature
+ * 
+ *          Version 30 Released on 2024-09-14
+ *          2024-06-20 RJB Now prints message when CONFIG.TXT not found on SD
+ *                         Added Apache Copyright License
+ *                         Added printing of Copyright to Serial Console
+ *          2024-07-23 RJB Added dg_adjustment = 2.5 when removing 5MDIST.TXT
+ *          2024-08-22 RJB Addded support for Globe temperature.
+ *                         Added MCP_3 dedicated to Globe temperature will report as gt1
+ *                         gt1 will be used when calling wbt_calculate()
+ *          2024-09-09 RJB Added MCP_4 dedicated to Globe temperature will report as gt2
+ *          2024-09-11 RJB Station Monitor changed to provide wind speed not interrupt count
+ *                         When setting SIM to INTERNAL we now set changed = true to
+ *                         report success and reboot message.
+ *                         Changed Td to Ta in the wbgt_using_wbt() function
+ *          2024-09-14 RJB Modified WiFi Support for UNSEC allowing no password Ex:  "UNSEC,ssid,"
+ * 
+ *          Version 31 Released on 2024-10-04
+ *          2024-10-02 RJB Tag name changes rg2t -> rgt2 and rg2p -> rgp2
+ * 
+ *          Version 32 Released on 2024-10-07
+ *          2024-10-07 RJB Improved hi_calculate() function. 
+ * 
+ *          Version 33 Released on 2024-11-04 (Early Relese to Argentina)
+ *          2024-11-04 RJB Added INFO_Do() at boot and when called via Do_Action with "INFO"
+ *                         Added Do_Action feature "SEND" to send OBS that are cued
+ *                         Added support for HDC302x sensor, Reports as hdt1,hsh1,hdt2,hdh2
+ *                         Added support for 5,10,15(default) minute obs transmit intervals.
+ *                         Moved reporting of SystemStatusBits to after we have read all the sensors in OBS_Do()
+ * 
+ *          Version 34 Released on 2024-11-05 (Early Relese to Argentina)
+ *          2024-11-05 RJB Discovered BMP390 first pressure reading is bad. Added read pressure to bmx_initialize()
+ *                         SEE: https://forums.adafruit.com/viewtopic.php?t=209906
+ *                         Bug fixes for 2nd BMP sensor in bmx_initialize() using first sensor data structure
+ *                         Now will only send humidity if bmx sensor supports it.
+ * 
+ *          Version 35 Released on 2024-11-13
+ *          2024-11-09 RJB HDC302x added sensor read in the sensor init
+ *          2024-11-13 RJB DFRobot_B_LUX_V30B support added  0 lumens to 200,000 lumens. Reports a blx
+ *                         Changed vmel lx tag vlx when sending to Particle
+ *   
+ *          Version 37 Released on 2024-12-11
+ *          2024-11-19 RJB Store INFO information in INFO.TXT. Every INFO call will overwrite the files content.
+ *          2024-11-26 RJB Some minor changes made in the code
+ *                         INFO will now report DailyRebootCountDownTimer as drct
+ *                         Improved blx_takereading() by adding a 1s timer to wait for the 4 bytes. Avoids infinite loop.
+ *                         Modified Adafruit_HDC302x/src/Adafruit_HDC302x.cpp library. So sendCommandReadTRH() avoids infinite loop.
+ *          2024-12-04 RJB Updated Adafruit_VEML7700 library to 2.1.6
+ *          2024-12-06 RJB Added support for lps35hw pressure and temperature lpp1,lpt1,lpp2,lpt2
+ *                         Upgrading to use deviceOS 6.1.1
+ *          2024-12-09 RJB INFO msg now sent before powering down do to low lipo battery.
+ * 
+ *          Version 38 Released on 2025-03-17 (Version 39 FEWSNET)
+ *          2025-01-07 RJB Moved LORA_IRQ_PIN from A5 to D6.
+ *          2025-01-14 RJB Rebuilt the LoRa message handling. 
+ *                         We now receive LoRa messages in JSON format
+ *                         We now store then forward to Particle LoRa message types: INFO, LR.
+ *                         On LoRa messages received, the JSON portion is forwarded 
+ *                         Added RG and associated pin to INFO messages  
+ *                         We now call OBS_PublishAll() before daily rebooting and powering down on low battery
+ *                         We moved low battery powerdown from 10% to 15%.
+ *          2025-01-21 RJB Added support for A4 to be configured for raw readings (Simple average of 5 samples) 10ms apart
+ *                           DoAction A4RAW. Reports to Particle as a4r 
+ *                         Added support for A5 to be configured for raw readings (Simple average of 5 samples) 10ms apart
+ *                           DoAction A5RAW and A5CLR. Reports to Particle as a5r 
+ *          2025-01-23 RJB Added support for Tinovi moisture sensors (Leaf, Soil, Multi Level Soil) 
+ *          2025-03-17 RJB Switched Heat Index Temp, Wet Bulb Temp, Wet Bulb calcs to use sht1 temp from mcp1 temp
+ *     
+ *          Version 40 Released on 2025-08-??
+ *          2025-04-08 RJB Removed the check for serial console in SimChangeCheck()
+ *          2025-04-13 RJB Reworked the handling of pin names. New function in PS.h called GetPinName()
+ *                         INFO will report "lora:NF" when LoRa is not found
+ *                         INFO Serial Console Enable now reports as "scepin(D8)":"DISABLED"  
+ *          2025-03-17 RJB Added Support for Muon - PLATFORM_MSOM
+ *                         Updated SdFat Library from 1.0.16 to 2.3.0
+ *                         Added Library Adafruit_TMP117 to support Muon built in Temperature sensor
+ *                         Bug, Left the 0 && in - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
  *
- *  Porting Notes:
- *     PMIC needs #if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
+ *  Muon Port Notes:
+ *     PLATFORM_ID == PLATFORM_MSOM
  *     https://github.com/particle-iot/device-os/blob/develop/hal/shared/platforms.h
  * 
- *     LoRa Needs a Pin Change.
- *     #if (PLATFORM_ID == PLATFORM_MSOM)
- *     #define LORA_IRQ_PIN  D20    // G0 on LoRa board
- *     #define LORA_SS       D3     // Slave Select Pin
- *     #define LORA_RESET    D21    // Used by lora_initialize()
+ *     Pin  Name
+ *     LORA MODULE 
+ *     40 D20 LORA_IRQ_PIN - G0 on LoRa board
+ *     36 D3  LORA_SS
+ *     38 D21 LORA_RESET
  *
- *     Serial Console moves to D4
- *     #if (PLATFORM_ID == PLATFORM_MSOM)
- *     int SCE_PIN = D4;
+ *     SERIAL CONSOLE 
+ *     33  D4 SCE_PIN
  * 
  *     SD CARD
- *     Pin  Name
  *     17  3v3
  *     19  SPI MOSI
  *     21  SPI MISO
  *     23  SPI SCK
  *     25  GND
  *     32  D5 CS
- * 
- *     #if (PLATFORM_ID == PLATFORM_MSOM)
- *     int LED_PIN = D22;             // Added LED Pin 36
- *     #else
- *     int  LED_PIN = D7;            // Built in LED
+ *     
+ *     LED
+ *     36  D22 LED_PIN
  * 
  *                        
  * NOTES:
@@ -64,6 +252,7 @@ PRODUCT_VERSION(1);
  *  Adafruit_PM25AQI        https://github.com/adafruit/Adafruit_PM25AQI - 1.0.6 I2C ADDRESS 0x12 - Modified to Compile, Adafruit_PM25AQI.cpp" line 104
  *  Adafruit_HDC302x        https://github.com/adafruit/Adafruit_HDC302x - 1.0.2 I2C ADDRESS 0x46 and 0x47 ( SHT uses 0x44 and x045)
  *  Adafruit_LPS35HW        https://github.com/adafruit/Adafruit_LPS35HW - 1.0.6 I2C ADDRESS 0x5D and 0x5C
+ *  Adafruit_TMP117         https://github.com/adafruit/Adafruit_TMP117 - 1.0.3 I2C ADDRESS 0x48
  *  DFRobot_B_LUX_V30B      https://github.com/DFRobot/DFRobot_B_LUX_V30B - 1.0.1 I2C ADDRESS 0x4A (Not Used Reference Only) SEN0390
  *                          https://wiki.dfrobot.com/Ambient_Light_Sensor_0_200klx_SKU_SEN0390
  *  RTCLibrary              https://github.com/adafruit/RTClib - 1.13.0
@@ -86,6 +275,11 @@ PRODUCT_VERSION(1);
  *  LeafSens                https://github.com/tinovi/LeafArduino   I2C ADDRESS 0x61
  *  i2cArduino              https://github.com/tinovi/i2cArduinoI2c I2C ADDRESS 0x63
  *  i2cMultiSm              https://github.com/tinovi/i2cMultiSoilArduino/tree/master/lib ADDRESS 0x65
+ * 
+ *  AS5600                  Wind Direction - Bit Banged 2C ADDRESS 0x36
+ * 
+ * LoRa Module
+ *   Adafruit RFM95W LoRa Radio Transceiver Breakout - 868 or 915 MHz https://www.adafruit.com/product/3072
  * 
  * Distance Sensors
  * The 5-meter sensors (MB7360, MB7369, MB7380, and MB7389) use a scale factor of (Vcc/5120) per 1-mm.
@@ -212,9 +406,28 @@ PRODUCT_VERSION(1);
  *     }
  *   }
  * 
+ * In SdFat/src/common/ArduinoFiles.h 
+ * #if defined(ARDUINO_SAM_DUE) && !defined(ARDUINO_API_VERSION)
+ * void flush() { BaseFile::sync(); }
+ * #else
+ * // void flush() override { BaseFile::sync(); } <<<< Replace with below
+ * void flush()  { BaseFile::sync(); }
+ * #endi
+
+
+
+
  * DFRobot_B_LUX_V30B Library Not used it. It's bit banging with possible infinate loops - RJB
  * 
- * PIN Assignments
+ * ========================================================
+ * Particle Connection code based on below
+ * ========================================================
+ * https://community.particle.io/t/calling-particle-disconnect-after-a-failed-particle-connect-does-not-stop-led-from-blinking-green/19723/6
+ * Note: Max Particle message size 622 characters 
+ * 
+ * ========================================================
+ * Boron/Argon PIN Assignments
+ * ========================================================
  * D8   = Serial Console (Ground Pin to Enable) - Not on Grove Shield
  * D7   = On Board LED - Lit when rain gauge tips, blinks when console connection needed
  * D6   = Reserved for Lora IRQ - Not on Grove Shield
@@ -237,13 +450,8 @@ PRODUCT_VERSION(1);
  * D10  = UART1 RX - Reserved for LoRa CS
  * D9   = UART1 TX - Reserved for LoRa RESET
  * 
- * Connection code based on below
- * https://community.particle.io/t/calling-particle-disconnect-after-a-failed-particle-connect-does-not-stop-led-from-blinking-green/19723/6
- * 
- * Max Particle message size 622 characters 
- * 
  * ========================================================
- * Support for 3rd Party Sim 
+ * Support for 3rd Party Sim Boron Only
  * ========================================================
  *   SEE https://support.particle.io/hc/en-us/articles/360039741113-Using-3rd-party-SIM-cards
  *   SEE https://docs.particle.io/cards/firmware/cellular/setcredentials/
@@ -261,8 +469,9 @@ PRODUCT_VERSION(1);
  *
  * ========================================================
  * Support for Argon WiFi Boards
- * https://docs.particle.io/reference/device-os/api/wifi/wifi/
  * ========================================================
+ * SEE: https://docs.particle.io/reference/device-os/api/wifi/wifi/
+ *
  * At the top level of the SD card make a file called WIFI.TXT
  * Add one line to the file
  * This line has 3 items that are comma separated Example
@@ -271,9 +480,10 @@ PRODUCT_VERSION(1);
  * 
  * Where AuthType is one of these keywords (WEP WPA WPA2 UNSEC)
  * Blank password is supported for UNSEC
- * ======================================================================================================================
  * 
+ * ========================================================
  * Collecting Wind Data
+ * ========================================================
  * Wind_SampleSpeed() - Return a wind speed based on how many interrupts and duration between calls to this function
  * Wind_SampleDirection() - Talk i2c to the AS5600 sensor and get direction
  * Wind_TakeReading() - Call this function every second. It calls wind direction and wind speed functions. Then saves samples in a circular buffer of 60 buckets.
@@ -303,14 +513,18 @@ PRODUCT_VERSION(1);
 #include <Adafruit_PM25AQI.h>
 #include <Adafruit_HDC302x.h>
 #include <Adafruit_LPS35HW.h>
+#if (PLATFORM_ID == PLATFORM_MSOM)
+#include <Adafruit_TMP117.h>
+#include <AB1805_RK.h>
+#else
 #include <RTClib.h>
+#endif
 #include <SdFat.h>
 #include <RH_RF95.h>
 #include <AES.h>
 #include <i2cArduino.h>
 #include <LeafSens.h>
 #include <i2cMultiSm.h>
-#include <AB1805_RK.h>
 
 /*
  * ======================================================================================================================
@@ -435,14 +649,20 @@ char SD_TX10M_FILE[] = "TXI10M.TXT";    // Transmit every 10 Minutes
 
 char SD_INFO_FILE[] = "INFO.TXT";       // Store INFO information in this file. Every INFO call will overwrite content
 
-
 #if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
 /*
  * ======================================================================================================================
- *  Power Management IC (bq24195)
+ *  Power Management IC (bq24195) I2C 0x6B
  * ======================================================================================================================
  */
 PMIC pmic;
+
+/*
+ * ======================================================================================================================
+ *  Fuel Gauge IC (MAX17043) I2C 0x36
+ * ======================================================================================================================
+ */
+// FuelGauge fuel;
 #endif
 
 /*
@@ -528,10 +748,22 @@ SYSTEM_THREAD(ENABLED);
  */
 void setup() {
 
+
 #if (PLATFORM_ID == PLATFORM_MSOM)
+  //  https://docs.particle.io/reference/datasheets/m-series/muon-datasheet/#firmware-settings
+
+  // Retrive the current system power configuration object so it can be modified.
   SystemPowerConfiguration powerConfig = System.getPowerConfiguration();
-  powerConfig.auxiliaryPowerControlPin(D7).interruptPin(A7);
+
+  // This enables the feature related to PMIC detection. 
+  powerConfig.feature(SystemPowerFeature::PMIC_DETECTION)
+      .auxiliaryPowerControlPin(D7)  // sets the GPIO pin D7 as the auxiliary power control pin aka 3.3V
+      .interruptPin(A7); // detect changes from the power management IC or related events
   System.setPowerConfiguration(powerConfig);
+
+  // Enable 3.3V on GPIO Header from my code. Avoid the System.setPowerConfiguration.
+  pinMode(D7, OUTPUT);
+  digitalWrite(D7, 1);
 #endif
 
   // The device has booted, reconnect the battery.
@@ -585,21 +817,34 @@ void setup() {
   // Check if correct time has been maintained by RTC
   // Uninitialized clock would be 2000-01-00T00:00:00
   stc_timestamp();
-  sprintf (msgbuf, "%s+", timestamp);
+  sprintf (msgbuf, "%sS", timestamp);
   Output(msgbuf);
 
-  // Read RTC and set system clock if RTC clock valid
+  // Read RTC and set system clock if RTC clock valid 
   rtc_initialize();
 
+  stc_timestamp();
+  sprintf (msgbuf, "%sS", timestamp);
+  Output(msgbuf);
+
   if (Time.isValid()) {
-    Output("STC: Valid");
+    Output("STC:VALID");
   }
   else {
-    Output("STC: Not Valid");
+    Output("STC:!VALID");
   }
 
   stc_timestamp();
-  sprintf (msgbuf, "%s=", timestamp);
+  sprintf (msgbuf, "%sS", timestamp);
+  Output(msgbuf);
+
+  // System Power and Battery State
+  sprintf (msgbuf, "PS:%d", System.powerSource());
+  Output(msgbuf);
+  sprintf (msgbuf, "BS:%d", System.batteryState());
+  Output(msgbuf);
+  float bpc = System.batteryCharge();
+  sprintf (msgbuf, "BPC:%d.%02d", (int)bpc, (int)(bpc*100)%100);
   Output(msgbuf);
 
 #if PLATFORM_ID == PLATFORM_ARGON
@@ -611,7 +856,9 @@ void setup() {
   WiFiPrintCredentials();
   WiFiChangeCheck();
   WiFiPrintCredentials();
-#else
+#endif
+
+#if PLATFORM_ID == PLATFORM_BORON
   //==================================================
   // Check if we need to program for Sim change
   //==================================================
@@ -714,7 +961,8 @@ void setup() {
  */
 void loop() {
   // If Serial Console Pin LOW then Display Station Information
-  if (0 && countdown && digitalRead(SCE_PIN) == LOW) {
+  if (0 && countdown && digitalRead(SCE_PIN) == LOW) {     // !!!!!!!!!!!! Remove the 0
+  // if (countdown && digitalRead(SCE_PIN) == LOW) {     
     StationMonitor();
     BackGroundWork();
     countdown--;
@@ -860,13 +1108,7 @@ void loop() {
     // the battery and transmit with out current drops causing the board to reset or 
     // power down out of our control.
 
-    // Could change the below to...
-    // SEE: https://docs.particle.io/reference/device-os/api/system-calls/system-uptime/
-    // int powerSource = System.powerSource();
-    // if ((powerSource == POWER_SOURCE_BATTERY) && (System.batteryCharge() <= 10.0) {
-
-    if (0 && !pmic.isPowerGood() && (System.batteryCharge() <= 15.0)) {   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+    if ((System.powerSource() == POWER_SOURCE_BATTERY) && (System.batteryCharge() <= 15.0)) {
       Output("Low Power!");
 
       if (Particle.connected()) {

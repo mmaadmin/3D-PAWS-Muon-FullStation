@@ -78,7 +78,7 @@ bool INFO_Do() {
   writer.name("bcs").value((digitalRead(PWR) && !digitalRead(CHG)) ? "CHARGING" : "!CHARGING"); // Battery Charger State
 #endif
 
-#if PLATFORM_ID == PLATFORM_BORON
+#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
   // Power Source
   const char *ps[] = {"UNKN", "VIN", "USB_HOST", "USB_ADAPTER", "USB_OTG", "BATTERY"};
   int sps = System.powerSource();
