@@ -691,7 +691,7 @@ void WiFiChangeCheck() {
               Output("WIFI:SSID=Null Err");
             }
 
-            // UNSEC is allow to have no password just a ssid
+            // UNSEC is allowed to have no password just a ssid, but non of the others
             else if ((strcmp (auth, "UNSEC") != 0)  && (pw == NULL)) {
               Output("WIFI:PW=Null Err");
             }
@@ -773,7 +773,150 @@ void WiFiChangeCheck() {
     Output ("WIFI:NOSD USING NVAUTH");
   }
 }
+#endif
 
+#if PLATFORM_ID == PLATFORM_MSOM
+/*
+ * ======================================================================================================================
+ * network_initialize() - Setup WiFi if WIFI.TXT exists. Else setup Cellular            
+ * ======================================================================================================================
+ */
+void network_initialize() {
+  File fp;
+  int i=0;
+  char *p, *id, *ssid, *pw;
+  char ch, buf[128];
+
+  if (SD_exists) {
+    // Test for file WIFI.TXT
+    if (SD.exists(SD_wifi_file)) {
+      fp = SD.open(SD_wifi_file, FILE_READ); // Open the file for reading, starting at the beginning of the file.
+
+      if (fp) {
+        // Deal with too small or too big of file
+        if (fp.size()<=7 || fp.size()>127) {
+          fp.close();
+          Output ("WIFI:Invalid SZ");
+        }
+        else {
+          Output ("WIFI:Open");
+
+          // Read one line from file
+          while (fp.available() && (i < 127 )) {
+            ch = fp.read();
+
+            // sprintf (msgbuf, "%02X : %c", ch, ch);
+            // Output (msgbuf);
+
+            if ((ch == 0x0A) || (ch == 0x0D) ) {  // newline or linefeed
+              break;
+            }
+            else {
+              buf[i++] = ch;
+            }
+          }
+          fp.close();
+
+          // At this point we have encountered EOF, CR, or LF
+          // Now we need to terminate array with a null to make it a string
+          buf[i] = (char) NULL;
+
+          // Parse string for the following
+          //   WIFI ssid password
+          p = &buf[0];
+          id = strtok_r(p, ",", &p);
+
+          if (id == NULL) {
+            Output("WIFI:ID=Null Err");
+          }
+          else if (strcmp (id, "MUON") != 0) { 
+            sprintf (msgbuf, "WIFI:ID[%s] Err", id);          
+            Output(msgbuf);
+          }
+          else {
+            ssid = strtok_r(p, ",", &p);
+            pw  = strtok_r(p, ",", &p);
+            
+            if (ssid == NULL) {
+              Output("WIFI:SSID=Null Err");
+            }
+            else if (pw == NULL) {
+              Output("WIFI:PW=Null Err");
+            }
+            else {
+              Output("NETWORK:SET WIFI");
+              MuonWifiEnabled = true;
+
+              sprintf (msgbuf, "WIFI:SSID[%s]", ssid);
+              Output(msgbuf);
+              sprintf (msgbuf, "WIFI:PW[%s]", pw);
+              Output(msgbuf);
+
+              Output("WIFI:Particle Cloud Disconnect");  // We should no be connected, but do anyway
+              Particle.disconnect();
+
+              Output("WIFI:Turning Off Cellular");
+              Cellular.off();    // Turn off cellular modem
+              waitUntil(Cellular.isOff);  // Optional: wait for cellular modem to power down
+
+              Output("WIFI:Turning On Wifi");
+              WiFi.on();
+              
+              if (WiFi.clearCredentials()) {
+                Output("WIFI:Cleared Wifi Creds");
+              } else {
+                Output("WIFI:Clear Wifi Creds Err");
+              }
+
+              if (WiFi.setCredentials(ssid, pw)) {
+                Output("WIFI:Credentials Set");
+              } else {
+                Output("WIFI:Credentials Set Err");
+              }
+
+              Output("WIFI:Connect Called");
+              WiFi.connect();
+              // waitUntil(WiFi.ready);  // No we want to move on with out network
+            }
+          }
+        }
+      }
+      else {
+        sprintf (msgbuf, "WIFI:OPENERR[%s]", SD_wifi_file);          
+        Output(msgbuf);
+        Output ("WIFI:USING CELLULAR");
+      }
+    } 
+    else {
+      Output ("WIFO:NOFILE USING CELLULAR");
+    }
+  } // SD enabled
+  else {
+    Output ("WIFI:NOSD USING CELLULAR");
+  }
+
+  if (MuonWifiEnabled == false) {
+    Output("NETWORK:SET CELL");
+    Output("CELL:Particle Cloud Disconnect");  // We should no be connected, but do anyway
+    Particle.disconnect();
+
+    Output("CELL:Turning Off WiFi");
+    WiFi.disconnect();      // Disconnect Wi-Fi cleanly
+    WiFi.off();             // Turn Wi-Fi radio off to save power and avoid interference
+
+    if (WiFi.clearCredentials()) {
+      Output("CELL:Cleared Wifi Creds");
+    } else {
+      Output("CELL:Clear Wifi Creds Err");
+    }
+
+    Output("CELL:Turning On Cellular");
+    Cellular.on();          // Power on cellular modem
+  }
+}
+#endif
+
+#if (PLATFORM_ID == PLATFORM_ARGON) || (PLATFORM_ID == PLATFORM_MSOM)
 /*
  * ======================================================================================================================
  * WiFiPrintCredentials() - Read NVRAM and print WiFi Creditials     
@@ -787,7 +930,6 @@ void WiFiPrintCredentials() {
   byte mac[6];
 
   WiFi.macAddress(mac);
-
 
   sprintf (msgbuf, "WIFI MAC[%02x:%02x:%02x:%02x:%02x:%02x]", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   Output(msgbuf);

@@ -212,7 +212,7 @@ PRODUCT_VERSION(1);
  *          2025-03-17 RJB Added Support for Muon - PLATFORM_MSOM
  *                         Updated SdFat Library from 1.0.16 to 2.3.0
  *                         Added support for TMP117 to support Muon built in Temperature sensor
- *                         Bug, Left the 0 && in - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
+ *                         Bug, Left the 0 && in prior release - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
  *                         Added resetReason to be printed at startup and in INFO
  *
  *  Muon Port Notes:
@@ -493,6 +493,17 @@ PRODUCT_VERSION(1);
  * Blank password is supported for UNSEC
  * 
  * ========================================================
+ * MUON WiFi Enable
+ * ========================================================
+ * At the top level of the SD card make a file called WIFI.TXT
+ * Add one line to the file
+ * This line has 3 items that are comma separated Example
+ * 
+ * MUON,ssid,password
+ * 
+ * MUON is a keyword to distinguish from Argon WIFI.TXT file
+ * 
+ * ========================================================
  * Collecting Wind Data
  * ========================================================
  * Wind_SampleSpeed() - Return a wind speed based on how many interrupts and duration between calls to this function
@@ -561,7 +572,6 @@ PRODUCT_VERSION(1);
  * 
  * OFF =   SSB &= ~SSB_PWRON
  * ON =    SSB |= SSB_PWROFF
- * 
  * ======================================================================================================================
  */
 #define SSB_PWRON           0x1       // Set at power on, but cleared after first observation
@@ -593,7 +603,6 @@ PRODUCT_VERSION(1);
 #define SSB_TSM             0x4000000 // Set if Tinovi Soil Moisture I2C Sensor missing
 #define SSB_TMSM            0x8000000 // Set if Tinovi MultiLevel Soil Moisture I2C Sensor missing
 
-
 /*
   0  = All is well, no data needing to be sent, this observation is not from the N2S file
   16 = There is N2S data, This observation is not from the N2S file
@@ -614,6 +623,7 @@ char *msgp;                   // Pointer to message text
 char Buffer32Bytes[32];       // General storage
 #if (PLATFORM_ID == PLATFORM_MSOM)
 int LED_PIN = D22;             // Added LED Header Pin 22
+bool MuonWifiEnabled = false;  // Set if we find a WIFI.TXT file
 #else
 int  LED_PIN = D7;            // Built in LED
 #endif
@@ -698,7 +708,7 @@ PMIC pmic;
 
 /*
  * ======================================================================================================================
- * HeartBeat() - Burns 250 ms 
+ * HeartBeat() - Burns 250 ms and part of our loop delay timing
  * ======================================================================================================================
  */
 void HeartBeat() {
@@ -789,7 +799,6 @@ void setup() {
   // Set Default Time Format
   Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-  // WatchDog
 #if (PLATFORM_ID == PLATFORM_MSOM)
   Watchdog.init(WatchdogConfiguration().timeout(120s));
   Watchdog.start();
@@ -872,6 +881,11 @@ void setup() {
   float bpc = System.batteryCharge();
   sprintf (msgbuf, "BPC:%d.%02d", (int)bpc, (int)(bpc*100)%100);
   Output(msgbuf);
+
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  network_initialize();
+  WiFiPrintCredentials();
+#endif
 
 #if PLATFORM_ID == PLATFORM_ARGON
 	pinMode(PWR, INPUT);

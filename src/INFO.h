@@ -34,7 +34,10 @@ bool INFO_Do() {
   writer.name("type").value("argon");
 #endif
 #if PLATFORM_ID == PLATFORM_BORON
-  writer.name("board").value("boron");
+  writer.name("type").value("boron");
+#endif
+#if PLATFORM_ID == PLATFORM_MSOM
+  writer.name("type").value("muon");
 #endif
 
   sprintf (Buffer32Bytes, "%d-%02d-%02dT%02d:%02d:%02d",
@@ -124,11 +127,40 @@ bool INFO_Do() {
   writer.name("bssid").value(Buffer32Bytes);
 #endif
 
-#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
+#if (PLATFORM_ID == PLATFORM_BORON)
   CellularSignal sig = Cellular.RSSI();
   writer.name("css").value(sig.getStrength(), 4);
   writer.name("csq").value(sig.getQuality(), 4);
   writer.name("imsi").value(imsi); // International Mobile Subscriber Identity
+#endif
+
+#if PLATFORM_ID == PLATFORM_MSOM
+  if (MuonWifiEnabled) {
+    writer.name("nw").value("WIFI");
+    WiFiSignal sig = WiFi.RSSI();
+    writer.name("wss").value(sig.getStrength(), 4);
+    writer.name("wsq").value(sig.getQuality(), 4);
+    byte mac[6];
+    WiFi.macAddress(mac);
+    sprintf (Buffer32Bytes, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    writer.name("mac").value(Buffer32Bytes);
+    writer.name("ip").value(WiFi.localIP().toString().c_str());
+    writer.name("mask").value(WiFi.subnetMask().toString().c_str());
+    writer.name("gateway").value(WiFi.gatewayIP().toString().c_str());
+    writer.name("dns").value(WiFi.dnsServerIP().toString().c_str());
+    writer.name("dhcps").value(WiFi.dhcpServerIP().toString().c_str());
+    writer.name("ssid").value(WiFi.SSID());
+    WiFi.BSSID(mac);
+    sprintf (Buffer32Bytes, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    writer.name("bssid").value(Buffer32Bytes);
+  }
+  else {
+    writer.name("nw").value("CELL");
+    CellularSignal sig = Cellular.RSSI();
+    writer.name("css").value(sig.getStrength(), 4);
+    writer.name("csq").value(sig.getQuality(), 4);
+    writer.name("imsi").value(imsi); // International Mobile Subscriber Identity
+  }
 #endif
 
 #if PLATFORM_ID == PLATFORM_BORON

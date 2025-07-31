@@ -482,6 +482,17 @@ PRODUCT_VERSION(1);
  * Blank password is supported for UNSEC
  * 
  * ========================================================
+ * MUON WiFi Enable
+ * ========================================================
+ * At the top level of the SD card make a file called WIFI.TXT
+ * Add one line to the file
+ * This line has 3 items that are comma separated Example
+ * 
+ * MUON,ssid,password
+ * 
+ * MUON is a keyword to distinguish from Argon WIFI.TXT file
+ * 
+ * ========================================================
  * Collecting Wind Data
  * ========================================================
  * Wind_SampleSpeed() - Return a wind speed based on how many interrupts and duration between calls to this function
@@ -550,7 +561,6 @@ PRODUCT_VERSION(1);
  * 
  * OFF =   SSB &= ~SSB_PWRON
  * ON =    SSB |= SSB_PWROFF
- * 
  * ======================================================================================================================
  */
 #define SSB_PWRON           0x1       // Set at power on, but cleared after first observation
@@ -602,6 +612,7 @@ char *msgp;                   // Pointer to message text
 char Buffer32Bytes[32];       // General storage
 #if (PLATFORM_ID == PLATFORM_MSOM)
 int LED_PIN = D22;             // Added LED Header Pin 22
+bool MuonWifiEnabled = false;  // Set if we find a WIFI.TXT file
 #else
 int  LED_PIN = D7;            // Built in LED
 #endif
@@ -777,7 +788,6 @@ void setup() {
   // Set Default Time Format
   Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-  // WatchDog
 #if (PLATFORM_ID == PLATFORM_MSOM)
   Watchdog.init(WatchdogConfiguration().timeout(120s));
   Watchdog.start();
@@ -860,6 +870,11 @@ void setup() {
   float bpc = System.batteryCharge();
   sprintf (msgbuf, "BPC:%d.%02d", (int)bpc, (int)(bpc*100)%100);
   Output(msgbuf);
+
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  network_initialize();
+  WiFiPrintCredentials();
+#endif
 
 #if PLATFORM_ID == PLATFORM_ARGON
 	pinMode(PWR, INPUT);
