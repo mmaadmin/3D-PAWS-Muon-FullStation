@@ -11,54 +11,54 @@
  */
 void GetPinName(pin_t pin, char *pinname) {
   struct PinMap {
-      pin_t pin;
-      const char *name;
+    pin_t pin;
+    const char *name;
   };
 
 #if (PLATFORM_ID == PLATFORM_MSOM)
   const PinMap pinTable[] = {
-      { A0, "A0" },   // Same pin as D19 
-      { A1, "A1" },   // Same pin as D18 
-      { A2, "A2" },   // Same pin as D17 
-      { A5, "A5" },   // Same pin as D14 
-      { A6, "A6" },   // Same pin as D29
-      { D0, "D0" },   // Same pin as SDA 
-      { D1, "D1" },   // Same pin as SCL
-      { D2, "D2" }, 
-      { D3, "D3" },
-      { D4, "D4" }, 
-      { D5, "D5" }, 
-      { D6, "D6" }, 
-      { D9, "D9" },   // Same pin as TX
-      { D10, "D10" }, // Same pin as RX
-      { D11, "D11" }, // Same pin as MISO
-      { D12, "D12" }, // Same pin as MOSI
-      { D13, "D13" }, // Same pin as SCK
-      { D20, "D20" }, { D21, "D21" }, { D22, "D22" }, { D24, "D24" },
-      { D25, "D25" }, { D26, "D26" }, { D27, "D27" }
+    { A0, "A0" },   // Same pin as D19 
+    { A1, "A1" },   // Same pin as D18 
+    { A2, "A2" },   // Same pin as D17 
+    { A5, "A5" },   // Same pin as D14 
+    { A6, "A6" },   // Same pin as D29
+    { D0, "D0" },   // Same pin as SDA 
+    { D1, "D1" },   // Same pin as SCL
+    { D2, "D2" }, 
+    { D3, "D3" },
+    { D4, "D4" }, 
+    { D5, "D5" }, 
+    { D6, "D6" }, 
+    { D9, "D9" },   // Same pin as TX
+    { D10, "D10" }, // Same pin as RX
+    { D11, "D11" }, // Same pin as MISO
+    { D12, "D12" }, // Same pin as MOSI
+    { D13, "D13" }, // Same pin as SCK
+    { D20, "D20" }, { D21, "D21" }, { D22, "D22" }, { D24, "D24" },
+    { D25, "D25" }, { D26, "D26" }, { D27, "D27" }
   };
 #else
   const PinMap pinTable[] = {
-      { A0, "A0" },   // Same pin as D19 
-      { A1, "A1" },   // Same pin as D18 
-      { A2, "A2" },   // Same pin as D17 
-      { A3, "A3" },   // Same pin as D16
-      { A4, "A4" },   // Same pin as D15
-      { A5, "A5" },   // Same pin as D14 
-      { D0, "D0" },   // Same pin as SDA 
-      { D1, "D1" },   // Same pin as SCL
-      { D2, "D2" }, 
-      { D3, "D3" },
-      { D4, "D4" }, 
-      { D5, "D5" }, 
-      { D6, "D6" }, 
-      { D7, "D7" },
-      { D8, "D8" },
-      { D9, "D9" },   // Same pin as TX
-      { D10, "D10" }, // Same pin as RX
-      { D11, "D11" }, // Same pin as MISO
-      { D12, "D12" }, // Same pin as MOSI
-      { D13, "D13" }, // Same pin as SCK
+    { A0, "A0" },   // Same pin as D19 
+    { A1, "A1" },   // Same pin as D18 
+    { A2, "A2" },   // Same pin as D17 
+    { A3, "A3" },   // Same pin as D16
+    { A4, "A4" },   // Same pin as D15
+    { A5, "A5" },   // Same pin as D14 
+    { D0, "D0" },   // Same pin as SDA 
+    { D1, "D1" },   // Same pin as SCL
+    { D2, "D2" }, 
+    { D3, "D3" },
+    { D4, "D4" }, 
+    { D5, "D5" }, 
+    { D6, "D6" }, 
+    { D7, "D7" },
+    { D8, "D8" },
+    { D9, "D9" },   // Same pin as TX
+    { D10, "D10" }, // Same pin as RX
+    { D11, "D11" }, // Same pin as MISO
+    { D12, "D12" }, // Same pin as MOSI
+    { D13, "D13" }, // Same pin as SCK
   };
 #endif
 
@@ -70,6 +70,54 @@ void GetPinName(pin_t pin, char *pinname) {
   }
 
   strcpy(pinname, "NF");
+}
+
+/*
+ * ======================================================================================================================
+ * OutputResetReason() - 
+ * ======================================================================================================================
+ */
+void OutputResetReason() {
+  struct ResetReasonEntry {
+    int code;
+    const char* description;
+  };
+
+  const ResetReasonEntry resetReasonTable[] = {
+    {0,   "None / Unknown"},
+    {10,  "Unknown Reset Reason"},
+    {20,  "Reset Pin (button or pin)"},
+    {30,  "Low Power Management Reset"},
+    {40,  "Power Down Reset"},
+    {50,  "Brownout Reset"},
+    {60,  "Hardware Watchdog Reset"},
+    {70,  "Successful Firmware Update"},
+    {80,  "Firmware Update Error (deprecated)"},
+    {90,  "Firmware Update Timeout"},
+    {100, "Factory Reset Requested"},
+    {110, "Safe Mode Requested"},
+    {120, "DFU Mode Requested"},
+    {130, "System Panic (SOS Code)"},
+    {140, "User Reset (software call)"},
+    // Add more entries here as needed
+  };
+
+  // Enable reset info feature to get valid reset reason data
+
+  int resetReason = System.resetReason();
+  uint32_t resetData = System.resetReasonData();
+
+  // Find reset reason description by code inline
+  const char* reasonText = "Unknown Reset Reason";
+  for (unsigned int i = 0; i < sizeof(resetReasonTable) / sizeof(resetReasonTable[0]); i++) {
+    if (resetReasonTable[i].code == resetReason) {
+        reasonText = resetReasonTable[i].description;
+        break;
+    }
+  }
+
+  sprintf(msgbuf, "RR:%s (%d,%lu)", reasonText, resetReason, resetData);
+  Output(msgbuf);
 }
 
 /*
@@ -115,9 +163,8 @@ void DeviceReset() {
   // Should not get here if relay / watchdog is connected.
   digitalWrite(REBOOT_PIN, LOW);
   delay(2000); 
-
-  // May never get here if relay board / watchdog not connected.
-
+   // May never get here if relay cuts our power.
+ 
   // Resets the device, just like hitting the reset button or powering down and back up.
   System.reset();
 }

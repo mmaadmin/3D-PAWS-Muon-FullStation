@@ -197,11 +197,12 @@ PRODUCT_VERSION(1);
  *          2025-04-08 RJB Removed the check for serial console in SimChangeCheck()
  *          2025-04-13 RJB Reworked the handling of pin names. New function in PS.h called GetPinName()
  *                         INFO will report "lora:NF" when LoRa is not found
- *                         INFO Serial Console Enable now reports as "scepin(D8)":"DISABLED"  
+ *                         INFO Serial Console Enable now reports as "scepin(D8)":"DISABLED"                         
  *          2025-03-17 RJB Added Support for Muon - PLATFORM_MSOM
  *                         Updated SdFat Library from 1.0.16 to 2.3.0
- *                         Added Library Adafruit_TMP117 to support Muon built in Temperature sensor
- *                         Bug, Left the 0 && in - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
+ *                         Added support for TMP117 to support Muon built in Temperature sensor
+ *                         Bug, Left the 0 && in prior release - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
+ *                         Added resetReason to be printed at startup and in INFO
  *
  *  Muon Port Notes:
  *     PLATFORM_ID == PLATFORM_MSOM
@@ -252,7 +253,6 @@ PRODUCT_VERSION(1);
  *  Adafruit_PM25AQI        https://github.com/adafruit/Adafruit_PM25AQI - 1.0.6 I2C ADDRESS 0x12 - Modified to Compile, Adafruit_PM25AQI.cpp" line 104
  *  Adafruit_HDC302x        https://github.com/adafruit/Adafruit_HDC302x - 1.0.2 I2C ADDRESS 0x46 and 0x47 ( SHT uses 0x44 and x045)
  *  Adafruit_LPS35HW        https://github.com/adafruit/Adafruit_LPS35HW - 1.0.6 I2C ADDRESS 0x5D and 0x5C
- *  Adafruit_TMP117         https://github.com/adafruit/Adafruit_TMP117 - 1.0.3 I2C ADDRESS 0x48
  *  DFRobot_B_LUX_V30B      https://github.com/DFRobot/DFRobot_B_LUX_V30B - 1.0.1 I2C ADDRESS 0x4A (Not Used Reference Only) SEN0390
  *                          https://wiki.dfrobot.com/Ambient_Light_Sensor_0_200klx_SKU_SEN0390
  *  RTCLibrary              https://github.com/adafruit/RTClib - 1.13.0
@@ -276,7 +276,9 @@ PRODUCT_VERSION(1);
  *  i2cArduino              https://github.com/tinovi/i2cArduinoI2c I2C ADDRESS 0x63
  *  i2cMultiSm              https://github.com/tinovi/i2cMultiSoilArduino/tree/master/lib ADDRESS 0x65
  * 
- *  AS5600                  Wind Direction - Bit Banged 2C ADDRESS 0x36
+ *  AS5600                  Wind Direction - Bit Banged I2C ADDRESS 0x36
+ *  TMP112A                 Particle Muon on board temperature sensor - Bit Banged I2C ADDRESS 0x48
+
  * 
  * LoRa Module
  *   Adafruit RFM95W LoRa Radio Transceiver Breakout - 868 or 915 MHz https://www.adafruit.com/product/3072
@@ -380,6 +382,7 @@ PRODUCT_VERSION(1);
  *  cfr    Charger Fault Register
  *  css  = Cell Signal Strength - percentage (0.0 - 100.0)
  *  hlth = Health 32bits - See System Status Bits in below define statements
+ *  pmts = Particle Muon on board temperature sensor
  * 
  * AN002 Device Powerdown
  * https://support.particle.io/hc/en-us/articles/360044252554?input_string=how+to+handle+low+battery+and+recovery
@@ -413,9 +416,6 @@ PRODUCT_VERSION(1);
  * // void flush() override { BaseFile::sync(); } <<<< Replace with below
  * void flush()  { BaseFile::sync(); }
  * #endi
-
-
-
 
  * DFRobot_B_LUX_V30B Library Not used it. It's bit banging with possible infinate loops - RJB
  * 
@@ -514,7 +514,6 @@ PRODUCT_VERSION(1);
 #include <Adafruit_HDC302x.h>
 #include <Adafruit_LPS35HW.h>
 #if (PLATFORM_ID == PLATFORM_MSOM)
-#include <Adafruit_TMP117.h>
 #include <AB1805_RK.h>
 #else
 #include <RTClib.h>
@@ -541,8 +540,9 @@ PRODUCT_VERSION(1);
  * ======================================================================================================================
  */
 #define REBOOT_PIN            A0  // Trigger Watchdog or external relay to cycle power
+#if (PLATFORM_ID != PLATFORM_MSOM)
 #define HEARTBEAT_PIN         A1  // Watchdog Heartbeat Keep Alive
-
+#endif
 /*
  * ======================================================================================================================
  * System Status Bits used for report health of systems - 0 = OK
@@ -581,7 +581,6 @@ PRODUCT_VERSION(1);
 #define SSB_TLW             0x2000000 // Set if Tinovi Leaf Wetness I2C Sensor missing
 #define SSB_TSM             0x4000000 // Set if Tinovi Soil Moisture I2C Sensor missing
 #define SSB_TMSM            0x8000000 // Set if Tinovi MultiLevel Soil Moisture I2C Sensor missing
-
 
 /*
   0  = All is well, no data needing to be sent, this observation is not from the N2S file
@@ -687,13 +686,18 @@ PMIC pmic;
 
 /*
  * ======================================================================================================================
- * HeartBeat() - Burns 250 ms 
+ * HeartBeat() - Burns 250 ms and part of our loop delay timing
  * ======================================================================================================================
  */
 void HeartBeat() {
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  Watchdog.refresh();
+  delay(250);
+#else
   digitalWrite(HEARTBEAT_PIN, HIGH);
   delay(250);
   digitalWrite(HEARTBEAT_PIN, LOW);
+#endif
 }
 
 /*
@@ -716,7 +720,7 @@ void BackGroundWork() {
     pm25aqi_TakeReading();
   }
 
-  HeartBeat();  // Burns 250ms
+  HeartBeat();  // Provides a 250ms delay
 
   if (LORA_exists) {
     lora_msg_poll(); // Provides a 750ms delay
@@ -748,7 +752,6 @@ SYSTEM_THREAD(ENABLED);
  */
 void setup() {
 
-
 #if (PLATFORM_ID == PLATFORM_MSOM)
   //  https://docs.particle.io/reference/datasheets/m-series/muon-datasheet/#firmware-settings
 
@@ -774,18 +777,29 @@ void setup() {
   // Set Default Time Format
   Time.setFormat(TIME_FORMAT_ISO8601_FULL);
 
-  // WatchDog 
-  pinMode (REBOOT_PIN, OUTPUT);
+  // WatchDog
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  Watchdog.init(WatchdogConfiguration().timeout(120s));
+  Watchdog.start();
+#else
   pinMode (HEARTBEAT_PIN, OUTPUT);
+#endif
 
+  pinMode (REBOOT_PIN, OUTPUT);
   pinMode (LED_PIN, OUTPUT);
   
-  Output_Initialize();
+  Output_Initialize(); // Waits for Serial if Jumper in place for 60s
   delay(2000); // Prevents usb driver crash on startup, Arduino needed this so keeping for Particle
 
   Serial_write(COPYRIGHT);
   Output (VERSION_INFO);
-  delay(4000);
+
+  System.enableFeature(FEATURE_RESET_INFO); 
+  OutputResetReason();
+
+  delay(4000); // Give some time to see this
+
+  HeartBeat(); // Lets refresh Watchdog - just because we can
 
   // Set Daily Reboot Timer
   DailyRebootCountDownTimer = cf_reboot_countdown_timer;
@@ -888,6 +902,10 @@ void setup() {
 
   // Check SD Card for files to determine if pin A5 Raw file
   A5_Initialize();
+
+#if (PLATFORM_ID == PLATFORM_MSOM)
+  pmts_initialize();  // Particle Muon on board temperature sensor (TMP112A)
+#endif
 
   // Adafruit i2c Sensors
   bmx_initialize();

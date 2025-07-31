@@ -248,7 +248,7 @@ bool TLW_exists = false;
 
 /*
  * ======================================================================================================================
- *  Tinovi Soil Moisture
+ *  Tinovi MultiLevel Soil Moisture (4 Soil and 2 Temperature)
  *    Chip ID = 0x63,  Library init checks this.
  * ======================================================================================================================
  */
@@ -265,6 +265,16 @@ bool TSM_exists = false;
 #define TMSM_ADDRESS    0x65
 SVMULTI tmsm;
 bool TMSM_exists = false;
+
+/*
+ * ======================================================================================================================
+ *  Particle Muon on board Temperature sensor (TMP112A)
+ * ======================================================================================================================
+ */
+#if (PLATFORM_ID == PLATFORM_MSOM)
+#define PMTS_ADDRESS  0x48
+bool PMTS_exists = false;
+#endif
 
 
 /* 
@@ -1290,3 +1300,52 @@ void tmsm_initialize() {
   }
   Output (msgp);
 }
+
+
+#if (PLATFORM_ID == PLATFORM_MSOM)
+/*
+ * ======================================================================================================================
+ *  ptms_readtempc() - Read Particle Muon on board temperature sensor (TMP112A) Celsius
+ * ======================================================================================================================
+ */
+float ptms_readtempc() {
+  unsigned data[2] = {0, 0};
+  Wire.beginTransmission(0x48);
+  Wire.write(0x00);  // Select temperature register
+  Wire.endTransmission();
+  delay(300);
+  Wire.requestFrom(0x48, 2);
+  if (Wire.available() == 2) {
+    data[0] = Wire.read();
+    data[1] = Wire.read();
+    int temp = ((data[0] << 8) + data[1]) >> 4;
+    if (temp > 2047) {
+        temp -= 4096;
+    }
+    float cTemp = temp * 0.0625;      // Celsius
+    //float fTemp = cTemp * 1.8 + 32; // Fahrenheit
+    return (cTemp);
+  }
+  return (-999.99);
+}
+
+/*
+ * ======================================================================================================================
+ *  pmts_initialize() - Initialize Particle Muon on board temperature sensor (TMP112A)
+ * ======================================================================================================================
+ */
+void pmts_initialize() {
+  Output("PMTS:INIT");
+  float t = ptms_readtempc();
+
+  if (t == -999.99) {
+    PMTS_exists = false;
+    Output ("PMTS NF");
+  }
+  else {
+    PMTS_exists = true;
+    sprintf (msgbuf, "PMTS OK T=%d.%02d", (int)t, (int)(t*100.0)%100);
+    Output (msgbuf);
+  }
+}
+#endif

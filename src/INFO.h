@@ -45,6 +45,10 @@ bool INFO_Do() {
   writer.name("ver").value(VERSION_INFO);
   writer.name("hth").value((int) SystemStatusBits);
 
+  // Reboot/Reset Reason and data
+  sprintf (Buffer32Bytes,"%d-%d", System.resetReason(), System.resetReasonData());
+  writer.name("rr").value(Buffer32Bytes);;
+
   sprintf (Buffer32Bytes,"%ds", OBSERVATION_INTERVAL/1000);
   writer.name("obsi").value(Buffer32Bytes);
   sprintf (Buffer32Bytes,"%dm", (int) obs_tx_interval);
@@ -120,13 +124,14 @@ bool INFO_Do() {
   writer.name("bssid").value(Buffer32Bytes);
 #endif
 
-#if PLATFORM_ID == PLATFORM_BORON
+#if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
   CellularSignal sig = Cellular.RSSI();
   writer.name("css").value(sig.getStrength(), 4);
   writer.name("csq").value(sig.getQuality(), 4);
-
   writer.name("imsi").value(imsi); // International Mobile Subscriber Identity
+#endif
 
+#if PLATFORM_ID == PLATFORM_BORON
   SimType simType = Cellular.getActiveSim();
   if (simType == INTERNAL_SIM) {
     writer.name("actsim").value("INTERNAL");
@@ -134,6 +139,16 @@ bool INFO_Do() {
     writer.name("actsim").value("EXTERNAL");
   } else {
     writer.name("actsim").value("ERR");
+  }
+#endif
+
+#if PLATFORM_ID == PLATFORM_MSOM
+  // Particle Muon on board temperature sensor 
+  if (PMTS_exists) {
+    writer.name("pmts").value(ptms_readtempc(), 2);
+  }
+  else {
+    writer.name("pmts").value("NF");
   }
 #endif
 

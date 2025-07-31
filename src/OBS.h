@@ -1116,7 +1116,19 @@ void OBS_Do() {
     obs[oidx].sensor[sidx].f_obs = (float) t;
     obs[oidx].sensor[sidx++].inuse = true;
 // Output("DB:OBS_TMSMx");
-  } 
+  }
+
+#if PLATFORM_ID == PLATFORM_MSOM
+  // Particle Muon on board temperature sensor 
+  if (PMTS_exists) {
+    float t = ptms_readtempc();
+    // t = (isnan(t) || (t < QC_MIN_T)  || (t > QC_MAX_T))  ? QC_ERR_T  : t; // This is not and environmental sensor
+    strcpy (obs[oidx].sensor[sidx].id, "pmts");
+    obs[oidx].sensor[sidx].type = F_OBS;
+    obs[oidx].sensor[sidx].f_obs = (float) t;
+    obs[oidx].sensor[sidx++].inuse = true;
+  }
+#endif
 
   // Set this after we read all sensors. So we capture if their state changes 
   obs[oidx].hth = SystemStatusBits;
