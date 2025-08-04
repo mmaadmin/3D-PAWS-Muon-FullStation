@@ -214,6 +214,8 @@ PRODUCT_VERSION(1);
  *                         Added support for TMP117 to support Muon built in Temperature sensor
  *                         Bug, Left the 0 && in prior release - if (0 && countdown && digitalRead(SCE_PIN) == LOW)
  *                         Added resetReason to be printed at startup and in INFO
+ *                         Added GNSS to INFO
+ *                         Reworked when we initialize wind and make first obs at startup
  *
  *  Muon Port Notes:
  *     PLATFORM_ID == PLATFORM_MSOM
@@ -238,6 +240,15 @@ PRODUCT_VERSION(1);
  *     
  *     LED
  *     36  D22 LED_PIN
+ * 
+ *     GPS
+ *     16 D24 Serial2 TX (UART transmit from MCU)
+ *     18 D25 Serial2 RX (UART receive to MCU)
+ * 
+ *     REBOOT PIN
+ *     12  D6
+ *     14  GND
+ *     
  * 
  *                        
  * NOTES:
@@ -289,7 +300,20 @@ PRODUCT_VERSION(1);
  * 
  *  AS5600                  Wind Direction - Bit Banged I2C ADDRESS 0x36
  *  TMP112A                 Particle Muon on board temperature sensor - Bit Banged I2C ADDRESS 0x48
-
+ * 
+ * GPS Module - GNSS library for Particle SOMs - particle-som-gnss v1.0.0
+ *   This standalone GNSS (Global Navigation Satellite System) library is designed specifically for Particle 
+ *   cellular modems with built-in GNSS support, including the M-SOM platform.  
+ *   It provides a simple and efficient interface to access and utilize GNSS data for location-based 
+ *   applications on Particle devices.
+ * 
+ *   Adds location.h  Source at https://github.com/particle-iot/particle-som-gnss
+ * 
+ *  The GPS (GNSS) functionality on the Particle Muon will continue to work even if you run Cellular.off();,
+ *  as the GNSS module operates independently from the cellular modem on supported Particle devices.
+ *  It communicates internally over UART (Serial2 on pins D24/D25)
+ *     D24 (Pin 16): Serial2 TX (UART transmit from MCU)
+ *     D25 (Pin 18): Serial2 RX (UART receive to MCU)
  * 
  * LoRa Module
  *   Adafruit RFM95W LoRa Radio Transceiver Breakout - 868 or 915 MHz https://www.adafruit.com/product/3072
@@ -537,6 +561,7 @@ PRODUCT_VERSION(1);
 #include <Adafruit_LPS35HW.h>
 #if (PLATFORM_ID == PLATFORM_MSOM)
 #include <AB1805_RK.h>
+#include <location.h>
 #else
 #include <RTClib.h>
 #endif
@@ -561,8 +586,10 @@ PRODUCT_VERSION(1);
  *  Relay Power Control Pin
  * ======================================================================================================================
  */
+#if (PLATFORM_ID == PLATFORM_MSOM)
+#define REBOOT_PIN            D6  // Trigger Watchdog or external relay to cycle power
+#else
 #define REBOOT_PIN            A0  // Trigger Watchdog or external relay to cycle power
-#if (PLATFORM_ID != PLATFORM_MSOM)
 #define HEARTBEAT_PIN         A1  // Watchdog Heartbeat Keep Alive
 #endif
 /*
@@ -713,8 +740,9 @@ PMIC pmic;
  */
 void HeartBeat() {
 #if (PLATFORM_ID == PLATFORM_MSOM)
+  uint64_t MsFromNow = System.millis() + 250;
   Watchdog.refresh();
-  delay(250);
+  delay((int64_t)(MsFromNow - System.millis()));
 #else
   digitalWrite(HEARTBEAT_PIN, HIGH);
   delay(250);
@@ -885,6 +913,12 @@ void setup() {
 #if (PLATFORM_ID == PLATFORM_MSOM)
   network_initialize();
   WiFiPrintCredentials();
+
+  // Turn on GPS
+  Output("GPS:Enable");
+  LocationConfiguration config;
+  config.enableAntennaPower(GNSS_ANT_PWR);
+  Location.begin(config);
 #endif
 
 #if PLATFORM_ID == PLATFORM_ARGON
@@ -978,7 +1012,6 @@ void setup() {
   else {
     Output ("DoAction:ERR");
   }
-  Wind_Distance_Air_Initialize(); // Will call HeartBeat()
 
 #if (PLATFORM_ID == PLATFORM_BORON) || (PLATFORM_ID == PLATFORM_MSOM)
   // Get International Mobile Subscriber Identity
@@ -994,8 +1027,9 @@ void setup() {
   if (Time.isValid()) {
     // We now a a valid clock so we can initialize the EEPROM and make an observation
     EEPROM_Initialize();
-    OBS_Do();   
+    //OBS_Do();     
   }
+  ws_refresh = true;
 }
 
 /*
@@ -1025,14 +1059,21 @@ void loop() {
         EEPROM_Initialize();
       }
 
+      if (SendSystemInformation && Particle.connected()) {
+        INFO_Do(); // Function sets SendSystemInformation back to false.
+      }
+
+      // If we waited too long for acks while publishing and this threw off our wind observations.
+      // In that code ws_refresh was set to true for us to reinit wind data.
+      if (ws_refresh) {
+        Output ("WS Refresh Required");
+        Wind_Distance_Air_Initialize();
+      }
+
       // Perform an Observation, save in OBS structure, Write to SD
       if ( (System.millis() - lastOBS) > OBSERVATION_INTERVAL) {  // 1 minute
         I2C_Check_Sensors(); // Make sure Sensors are online
-        OBS_Do(); 
-      }
-
-      if (SendSystemInformation && Particle.connected()) {
-        INFO_Do(); // Function sets SendSystemInformation back to false.
+        OBS_Do();
       }
 
       // Time to Enable Network and Send Observations we have collected
@@ -1055,13 +1096,6 @@ void loop() {
           }
 
           OBS_PublishAll();
-
-          // If we waited too long for acks while publishing and this threw off our wind observations.
-          // In that code ws_refresh was set to true for us to reinit wind data.
-          if (ws_refresh) {
-            Output ("WS Refresh Required");
-            Wind_Distance_Air_Initialize();
-          }
 
           // Update OLED and Console
           stc_timestamp();

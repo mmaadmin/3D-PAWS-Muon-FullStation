@@ -31,10 +31,28 @@ void SD_NeedToSend_Add(char *observation);
  * ======================================================================================================================
  */
 #if (PLATFORM_ID == PLATFORM_MSOM)
+/*
+  #  Muon             LoRa Module
+  8  MOSI to D9  SPI1 MOSI (Master Out Slave In)
+  10 MISO to D10 SPI1 MISO (Master In Slave Out)
+  11 SCK  to D2  SPI1 SCK
+  36 CS   to D3  SPI1 ChipSel
+  38 RST  to D21      Reset
+  40 G0   to D20      DIO/IRQ
+*/
 #define LORA_IRQ_PIN  D20    // G0 on LoRa board
-#define LORA_SS       D3     // Slave Select Pin
+#define LORA_SS       D3     // Slave Select Pin aka CS
 #define LORA_RESET    D21    // Used by lora_initialize()
 #else
+/*
+  Boron            LoRa Module
+  MISO to D4  SPI1 MISO
+  MOSI to D3  SPI1 MOSI
+  SCK  to D2  SPI1 SCK
+  CS   to D9       ChipSel
+  RST  to D10      Reset
+  G0   to D6       DIO/IRQ
+*/
 #define LORA_IRQ_PIN  D6    // G0 on LoRa board
 #define LORA_SS       D10   // Slave Select Pin
 #define LORA_RESET    D9    // Used by lora_initialize()
@@ -311,7 +329,7 @@ void lora_relay_msg(char *obs) {
   message_counter = atoi (strtok_r(p, ",", &p));
   message = p;
 
-  sprintf (Buffer32Bytes, "Relay %s ID:%d CNT:%d", relay_msgtypes[message_type], unit_id, message_counter);
+  sprintf (Buffer32Bytes, "LORA TYPE:%s ID:%d CNT:%d", relay_msgtypes[message_type], unit_id, message_counter);
   Output (Buffer32Bytes);
   // Output (message);
 

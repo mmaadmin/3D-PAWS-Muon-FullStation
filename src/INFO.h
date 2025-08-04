@@ -14,6 +14,7 @@ bool INFO_Do() {
   char buf[256];
   const char *comma = "";
   time_t ts = Time.now();
+  bool result;
 
   Output("INFO_DO()");
 
@@ -341,6 +342,37 @@ bool INFO_Do() {
   writer.name(buf).value((digitalRead(SCE_PIN)) ? "DISABLED" : "ENABLED");
   writer.name("sce").value((SerialConsoleEnabled) ? "TRUE" : "FALSE");
 
+#if PLATFORM_ID == PLATFORM_MSOM
+/*
+  struct LocationPoint
+    unsigned int fix;               Indication of GNSS locked status
+    time_t epochTime;               Epoch time from device sources
+    time32_t systemTime;            System epoch time
+    double latitude;                Point latitude in degrees
+    double longitude;               Point longitude in degrees
+    float altitude;                 Point altitude in meters
+    float speed;                    Point speed in meters per second
+    float heading;                  Point heading in degrees
+    float horizontalAccuracy;       Point horizontal accuracy in meters
+    float horizontalDop;            Point horizontal dilution of precision
+    float verticalAccuracy;         Point vertical accuracy in meters
+    float verticalDop;              Point vertical dilution of precision
+    float timeToFirstFix;           Time-to-first-fix in seconds
+    unsigned int satsInUse;         Point satellites in use
+*/
+
+  LocationPoint point = {};
+
+  HeartBeat(); // Reset WatchDog before we make the next long running call
+  auto results = Location.getLocation(point, true); // True means wait for fix up to 90 seconds !!!
+  if (results == LocationResults::Fixed) {
+    writer.name("lat").value(point.latitude, 6);
+    writer.name("lon").value(point.longitude, 6);
+    writer.name("alt").value(point.altitude, 6);
+    writer.name("sat").value(point.satsInUse);
+  }
+#endif
+
   writer.endObject();
 
   // Done profiling system
@@ -364,11 +396,22 @@ bool INFO_Do() {
     Serial_write (msgbuf);
     sprintf (Buffer32Bytes, "INFO->PUB OK[%d]", strlen(msgbuf)+1);
     Output(Buffer32Bytes);
-    return(true);
+    result = true;
   }
   else {
     sprintf (Buffer32Bytes, "INFO->PUB ERR");
     Output(Buffer32Bytes);
-    return(false);
+    result = false;
   }
+
+  // Deal with how long this took. More than likely we will always need to do a refresh of wind
+  time_t endTime = Time.now();
+  unsigned long delta = (unsigned long)endTime-(unsigned long)ts;
+  if (delta) { // More than a second
+    sprintf(buf, "INFO:EXTM=%lu,WSRefreshSet", delta);
+    Output (buf);
+    ws_refresh = true;
+  }
+
+  return(result);
 }
